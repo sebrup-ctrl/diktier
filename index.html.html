@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diktier</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e0f;
+    --surface: #161618;
+    --surface2: #1e1e21;
+    --border: #2a2a2e;
+    --text: #e8e6e1;
+    --muted: #6b6b72;
+    --accent: #c9a96e;
+    --accent2: #e8c989;
+    --danger: #e05c5c;
+    --success: #5ce08a;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 48px 24px;
+    overflow-x: hidden;
+  }
+
+  /* Subtle grain texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 680px;
+  }
+
+  /* Header */
+  header {
+    margin-bottom: 52px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  .logo {
+    font-family: 'Instrument Serif', serif;
+    font-size: 2.2rem;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  .logo em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .tagline {
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding-bottom: 4px;
+  }
+
+  /* API Key input */
+  .api-section {
+    margin-bottom: 36px;
+  }
+
+  .field-label {
+    display: block;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .api-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  input[type="password"], input[type="text"] {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    padding: 12px 16px;
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input:focus {
+    border-color: var(--accent);
+  }
+
+  input::placeholder { color: var(--muted); }
+
+  .btn-save {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    padding: 12px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    letter-spacing: 0.05em;
+  }
+
+  .btn-save:hover { border-color: var(--accent); color: var(--accent); }
+
+  .api-status {
+    margin-top: 8px;
+    font-size: 0.68rem;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .api-status.ok { color: var(--success); }
+
+  /* Recorder card */
+  .recorder {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 40px;
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+  }
+
+  /* Waveform visualizer */
+  .waveform-wrap {
+    width: 100%;
+    height: 56px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 4px;
+  }
+
+  canvas#waveform {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .waveform-idle {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+  }
+
+  .waveform-idle span {
+    width: 2px;
+    background: var(--border);
+    border-radius: 2px;
+    animation: idle-wave 1.8s ease-in-out infinite;
+  }
+
+  .waveform-idle span:nth-child(1)  { height: 8px;  animation-delay: 0s; }
+  .waveform-idle span:nth-child(2)  { height: 14px; animation-delay: 0.1s; }
+  .waveform-idle span:nth-child(3)  { height: 20px; animation-delay: 0.2s; }
+  .waveform-idle span:nth-child(4)  { height: 28px; animation-delay: 0.3s; }
+  .waveform-idle span:nth-child(5)  { height: 18px; animation-delay: 0.4s; }
+  .waveform-idle span:nth-child(6)  { height: 10px; animation-delay: 0.5s; }
+  .waveform-idle span:nth-child(7)  { height: 22px; animation-delay: 0.35s; }
+  .waveform-idle span:nth-child(8)  { height: 30px; animation-delay: 0.25s; }
+  .waveform-idle span:nth-child(9)  { height: 18px; animation-delay: 0.15s; }
+  .waveform-idle span:nth-child(10) { height: 12px; animation-delay: 0.45s; }
+  .waveform-idle span:nth-child(11) { height: 8px;  animation-delay: 0.55s; }
+  .waveform-idle span:nth-child(12) { height: 16px; animation-delay: 0.05s; }
+  .waveform-idle span:nth-child(13) { height: 24px; animation-delay: 0.3s; }
+  .waveform-idle span:nth-child(14) { height: 14px; animation-delay: 0.2s; }
+  .waveform-idle span:nth-child(15) { height: 8px;  animation-delay: 0.1s; }
+
+  @keyframes idle-wave {
+    0%, 100% { opacity: 0.25; transform: scaleY(1); }
+    50% { opacity: 0.5; transform: scaleY(1.3); }
+  }
+
+  /* Timer */
+  .timer {
+    font-family: 'Instrument Serif', serif;
+    font-size: 3.2rem;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    line-height: 1;
+    min-width: 160px;
+    text-align: center;
+  }
+
+  .timer.recording { color: var(--danger); }
+  .timer.recording .dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    background: var(--danger);
+    border-radius: 50%;
+    margin-right: 10px;
+    animation: pulse 1s ease-in-out infinite;
+    vertical-align: middle;
+    position: relative;
+    top: -4px;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  /* Big record button */
+  .record-btn {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--surface2);
+    cursor: pointer;
+    position: relative;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .record-btn:hover {
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
+
+  .record-btn:active { transform: scale(0.97); }
+
+  .record-btn .inner {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--danger);
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .record-btn.recording .inner {
+    border-radius: 8px;
+    width: 28px;
+    height: 28px;
+    background: var(--danger);
+  }
+
+  .record-btn.recording {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 4px rgba(224, 92, 92, 0.15);
+  }
+
+  .btn-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* Status / loading */
+  .status-bar {
+    width: 100%;
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Output area */
+  .output-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: none;
+  }
+
+  .output-section.visible { display: block; animation: slideIn 0.3s ease; }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .output-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .output-title {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .output-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-action {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-action:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-action.copied { border-color: var(--success); color: var(--success); }
+
+  .transcript-text {
+    padding: 24px;
+    font-family: 'Instrument Serif', serif;
+    font-size: 1.15rem;
+    line-height: 1.75;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-height: 100px;
+    outline: none;
+    cursor: text;
+  }
+
+  .transcript-text:focus { background: rgba(201, 169, 110, 0.03); }
+
+  .char-count {
+    padding: 10px 24px;
+    border-top: 1px solid var(--border);
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  /* History */
+  .history-section { margin-top: 24px; }
+
+  .history-title {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .history-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .history-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+
+  .history-item:hover { border-color: var(--accent); }
+
+  .history-meta {
+    flex-shrink: 0;
+    text-align: right;
+    min-width: 80px;
+  }
+
+  .history-time {
+    font-size: 0.68rem;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+
+  .history-dur {
+    font-size: 0.62rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .history-preview {
+    font-family: 'Instrument Serif', serif;
+    font-size: 0.95rem;
+    color: var(--text);
+    line-height: 1.5;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .error-msg {
+    color: var(--danger);
+    font-size: 0.75rem;
+    padding: 12px 0;
+    letter-spacing: 0.03em;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">Dik<em>tier</em></div>
+    <div class="tagline">Sprache → Text</div>
+  </header>
+
+  <!-- API Key -->
+  <div class="api-section">
+    <label class="field-label" for="apiKey">OpenAI API-Schlüssel</label>
+    <div class="api-row">
+      <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off">
+      <button class="btn-save" onclick="saveKey()">Speichern</button>
+    </div>
+    <div class="api-status" id="apiStatus">Kein Schlüssel gespeichert</div>
+  </div>
+
+  <!-- Recorder -->
+  <div class="recorder">
+    <div class="waveform-wrap">
+      <canvas id="waveform"></canvas>
+      <div class="waveform-idle" id="waveformIdle">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+
+    <div class="timer" id="timer">0:00</div>
+
+    <button class="record-btn" id="recordBtn" onclick="toggleRecording()">
+      <div class="inner"></div>
+    </button>
+
+    <div class="btn-label" id="btnLabel">Aufnahme starten</div>
+
+    <div class="status-bar" id="statusBar"></div>
+  </div>
+
+  <!-- Output -->
+  <div class="output-section" id="outputSection">
+    <div class="output-header">
+      <div class="output-title">Transkription</div>
+      <div class="output-actions">
+        <button class="btn-action" id="copyBtn" onclick="copyText()">Kopieren</button>
+        <button class="btn-action" onclick="clearOutput()">Leeren</button>
+      </div>
+    </div>
+    <div class="transcript-text" id="transcriptText" contenteditable="true" spellcheck="true"></div>
+    <div class="char-count" id="charCount">0 Zeichen</div>
+  </div>
+
+  <!-- History -->
+  <div class="history-section" id="historySection" style="display:none">
+    <div class="history-title">Verlauf</div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+
+</div>
+
+<script>
+let mediaRecorder = null;
+let audioChunks = [];
+let timerInterval = null;
+let seconds = 0;
+let isRecording = false;
+let audioCtx = null;
+let analyser = null;
+let animFrame = null;
+let stream = null;
+const history = [];
+
+const canvas = document.getElementById('waveform');
+const ctx2d = canvas.getContext('2d');
+
+function saveKey() {
+  const val = document.getElementById('apiKey').value.trim();
+  if (!val) return;
+  sessionStorage.setItem('oai_key', val);
+  document.getElementById('apiKey').value = '';
+  document.getElementById('apiKey').placeholder = '●●●●●●●●●●●●●●●●';
+  setApiStatus('ok');
+}
+
+function getKey() { return sessionStorage.getItem('oai_key') || ''; }
+
+function setApiStatus(state, msg) {
+  const el = document.getElementById('apiStatus');
+  if (state === 'ok') {
+    el.className = 'api-status ok';
+    el.textContent = '✓ Schlüssel gespeichert (nur für diese Sitzung)';
+  } else {
+    el.className = 'api-status';
+    el.textContent = msg || 'Kein Schlüssel gespeichert';
+  }
+}
+
+// Init on load
+window.addEventListener('load', () => {
+  if (getKey()) setApiStatus('ok');
+  resizeCanvas();
+});
+
+window.addEventListener('resize', resizeCanvas);
+function resizeCanvas() {
+  canvas.width  = canvas.offsetWidth  * devicePixelRatio;
+  canvas.height = canvas.offsetHeight * devicePixelRatio;
+}
+
+async function toggleRecording() {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    await startRecording();
+  }
+}
+
+async function startRecording() {
+  if (!getKey()) {
+    setStatus('⚠ Bitte zuerst einen OpenAI API-Schlüssel eingeben.', true);
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch(e) {
+    setStatus('Mikrofon-Zugriff verweigert.', true);
+    return;
+  }
+
+  // Setup Web Audio for waveform
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+  const source = audioCtx.createMediaStreamSource(stream);
+  source.connect(analyser);
+
+  audioChunks = [];
+  const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ? 'audio/webm;codecs=opus' : 'audio/webm';
+  mediaRecorder = new MediaRecorder(stream, { mimeType });
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+  mediaRecorder.onstop = handleStop;
+  mediaRecorder.start(250);
+
+  isRecording = true;
+  seconds = 0;
+  document.getElementById('recordBtn').classList.add('recording');
+  document.getElementById('btnLabel').textContent = 'Aufnahme stoppen';
+  document.getElementById('waveformIdle').style.display = 'none';
+
+  timerInterval = setInterval(() => {
+    seconds++;
+    updateTimer();
+  }, 1000);
+
+  drawWaveform();
+  setStatus('');
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  stream.getTracks().forEach(t => t.stop());
+  clearInterval(timerInterval);
+  cancelAnimationFrame(animFrame);
+  if (audioCtx) audioCtx.close();
+  isRecording = false;
+  document.getElementById('recordBtn').classList.remove('recording');
+  document.getElementById('btnLabel').textContent = 'Aufnahme starten';
+  document.getElementById('waveformIdle').style.display = 'flex';
+  ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function updateTimer() {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  const el = document.getElementById('timer');
+  el.className = isRecording ? 'timer recording' : 'timer';
+  el.innerHTML = isRecording
+    ? `<span class="dot"></span>${m}:${String(s).padStart(2,'0')}`
+    : `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function drawWaveform() {
+  animFrame = requestAnimationFrame(drawWaveform);
+  const buf = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteTimeDomainData(buf);
+
+  const W = canvas.width, H = canvas.height;
+  ctx2d.clearRect(0, 0, W, H);
+
+  ctx2d.lineWidth = 2 * devicePixelRatio;
+  ctx2d.strokeStyle = '#c9a96e';
+  ctx2d.beginPath();
+
+  const sliceW = W / buf.length;
+  let x = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const v = buf[i] / 128.0;
+    const y = (v * H) / 2;
+    i === 0 ? ctx2d.moveTo(x, y) : ctx2d.lineTo(x, y);
+    x += sliceW;
+  }
+  ctx2d.lineTo(W, H / 2);
+  ctx2d.stroke();
+}
+
+async function handleStop() {
+  const duration = seconds;
+  const blob = new Blob(audioChunks, { type: 'audio/webm' });
+  setStatus('Transkribiere…', false, true);
+  document.getElementById('timer').className = 'timer';
+
+  try {
+    const text = await transcribe(blob);
+    showTranscript(text);
+    addHistory(text, duration);
+    setStatus('');
+  } catch(e) {
+    setStatus('Fehler: ' + e.message, true);
+  }
+}
+
+async function transcribe(blob) {
+  const key = getKey();
+  if (!key) throw new Error('Kein API-Schlüssel');
+
+  const formData = new FormData();
+  formData.append('file', blob, 'audio.webm');
+  formData.append('model', 'whisper-1');
+  formData.append('language', 'de');
+
+  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}` },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `HTTP ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.text || '';
+}
+
+function showTranscript(text) {
+  const section = document.getElementById('outputSection');
+  const el = document.getElementById('transcriptText');
+  section.classList.add('visible');
+  el.textContent = (el.textContent ? el.textContent + '\n\n' : '') + text;
+  updateCharCount();
+  section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function updateCharCount() {
+  const text = document.getElementById('transcriptText').textContent;
+  document.getElementById('charCount').textContent = `${text.length} Zeichen · ${text.split(/\s+/).filter(Boolean).length} Wörter`;
+}
+
+document.getElementById('transcriptText').addEventListener('input', updateCharCount);
+
+function copyText() {
+  const text = document.getElementById('transcriptText').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = '✓ Kopiert';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Kopieren'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function clearOutput() {
+  document.getElementById('transcriptText').textContent = '';
+  document.getElementById('outputSection').classList.remove('visible');
+  updateCharCount();
+}
+
+function setStatus(msg, isError = false, loading = false) {
+  const bar = document.getElementById('statusBar');
+  if (!msg) { bar.innerHTML = ''; return; }
+  bar.innerHTML = loading
+    ? `<div class="spinner"></div><span>${msg}</span>`
+    : `<span class="${isError ? 'error-msg' : ''}">${msg}</span>`;
+}
+
+function addHistory(text, duration) {
+  const m = Math.floor(duration / 60);
+  const s = duration % 60;
+  const now = new Date();
+  const time = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  history.unshift({ text, duration: `${m}:${String(s).padStart(2,'0')}`, time });
+
+  const section = document.getElementById('historySection');
+  const list = document.getElementById('historyList');
+  section.style.display = 'block';
+  list.innerHTML = '';
+  history.slice(0, 5).forEach((item, i) => {
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    div.innerHTML = `
+      <div class="history-meta">
+        <div class="history-time">${item.time}</div>
+        <div class="history-dur">${item.duration}</div>
+      </div>
+      <div class="history-preview">${item.text}</div>
+    `;
+    div.onclick = () => showTranscript(item.text);
+    list.appendChild(div);
+  });
+}
+</script>
+</body>
+</html>
